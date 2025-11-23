@@ -1,6 +1,6 @@
 # Deepfake Detection Tool
 
-**Creator:** Aditya
+**Creator:** Aditya Sonune
 
 ## Overview
 
@@ -114,7 +114,7 @@ deepfake_detection/
 
 ## License
 
-This project is created by **Aditya**. All rights reserved.
+This project is created by **Aditya Sonune**. All rights reserved.
 
 ## Acknowledgments
 
