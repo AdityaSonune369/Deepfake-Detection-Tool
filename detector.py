@@ -5,6 +5,7 @@ from PIL import Image, ImageChops, ImageEnhance
 import numpy as np
 import os
 import cv2
+from transformers import pipeline
 
 class FaceDetector:
     def __init__(self):
@@ -48,46 +49,22 @@ class FaceDetector:
 
 class DeepfakeDetector:
     def __init__(self, use_cuda=False):
-        self.device = torch.device("cuda" if use_cuda and torch.cuda.is_available() else "cpu")
-        print(f"Using device: {self.device}")
+        self.device = 0 if use_cuda and torch.cuda.is_available() else -1
+        print(f"Using device: {'cuda' if self.device == 0 else 'cpu'}")
         
         self.face_detector = FaceDetector()
         
-        # Load EfficientNet-B0
+        # Load Hugging Face Pipeline
+        # Using dima806/deepfake_vs_real_image_detection (better calibration)
+        # This model has lower false positive rate
         try:
-            # efficientnet_b0 is available in newer torchvision versions
-            # If not available, we might need a fallback, but assuming standard environment
-            weights = models.EfficientNet_B0_Weights.DEFAULT
-            self.model = models.efficientnet_b0(weights=weights)
-            
-            # Modify classifier for binary classification
-            # EfficientNet's classifier is a Sequential block, final layer is [1]
-            in_features = self.model.classifier[1].in_features
-            self.model.classifier[1] = nn.Linear(in_features, 2)
-            
-            self.model.eval()
-            self.model.to(self.device)
+            print("Loading Hugging Face model...")
+            self.pipe = pipeline("image-classification", model="dima806/deepfake_vs_real_image_detection", device=self.device)
             self.model_loaded = True
-            print("EfficientNet-B0 loaded successfully.")
+            print("Model loaded successfully.")
         except Exception as e:
-            print(f"Warning: Could not load EfficientNet model: {e}")
-            # Fallback to ResNet18 if EfficientNet fails (e.g. old torchvision)
-            try:
-                self.model = models.resnet18(pretrained=True)
-                self.model.fc = nn.Linear(self.model.fc.in_features, 2)
-                self.model.eval()
-                self.model.to(self.device)
-                self.model_loaded = True
-                print("Fallback: ResNet18 loaded.")
-            except Exception as e2:
-                print(f"Critical: Could not load fallback model: {e2}")
-                self.model_loaded = False
-
-        self.transform = transforms.Compose([
-            transforms.Resize((224, 224)),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-        ])
+            print(f"Error loading model: {e}")
+            self.model_loaded = False
 
     def perform_ela(self, image_path, quality=90):
         """
@@ -150,43 +127,71 @@ class DeepfakeDetector:
                 # Detect faces
                 face_crops = self.face_detector.detect_faces(img)
                 
+                images_to_process = []
                 if face_crops:
                     faces_found = True
-                    batch_t = []
-                    for face in face_crops:
-                        batch_t.append(self.transform(face))
-                    
-                    # Stack into a batch
-                    batch_t = torch.stack(batch_t).to(self.device)
-                    
-                    with torch.no_grad():
-                        outputs = self.model(batch_t)
-                        probs = torch.nn.functional.softmax(outputs, dim=1)
-                        # Get the max probability of "Fake" (class 1) across all faces
-                        # If ANY face is fake, the image is fake
-                        fake_probs = probs[:, 1]
-                        model_score = torch.max(fake_probs).item()
+                    images_to_process = face_crops
                 else:
-                    # No faces found, run on whole image as fallback
-                    # (Though EfficientNet trained on faces might not perform well on scenes)
-                    img_t = self.transform(img).unsqueeze(0).to(self.device)
-                    with torch.no_grad():
-                        outputs = self.model(img_t)
-                        probs = torch.nn.functional.softmax(outputs, dim=1)
-                        model_score = probs[0][1].item()
+                    images_to_process = [img]
+                
+                # Run pipeline
+                # Pipeline returns a list of dicts: [{'label': 'REAL', 'score': 0.9}, {'label': 'FAKE', 'score': 0.1}]
+                # We need to find the score for 'FAKE' (or '1')
+                
+                max_fake_score = 0.0
+                
+                for inp_img in images_to_process:
+                    results = self.pipe(inp_img)
+                    # The model returns labels like "Deepfake" or "Realism" (or "FAKE"/"REAL")
+                    # We need to find the score for the "fake" class
+                    
+                    fake_prob = 0.0
+                    for res in results:
+                        label = res['label'].upper()
+                        # Check for various fake labels: FAKE, DEEPFAKE, 1
+                        if 'FAKE' in label or 'DEEPFAKE' in label or label == '1':
+                            fake_prob = res['score']
+                        # Check for real labels: REAL, REALISM, 0
+                        elif 'REAL' in label or label == '0':
+                            # If it's real, the fake prob is 1 - real_prob
+                            pass
+                    
+                    # If we didn't find an explicit FAKE label, maybe it only returned the top class
+                    # If top class is REAL, fake_prob is low. If top class is FAKE, fake_prob is high.
+                    # Let's handle the case where we only get one label
+                    if len(results) == 1:
+                         label = results[0]['label'].upper()
+                         score = results[0]['score']
+                         if 'FAKE' in label or 'DEEPFAKE' in label or label == '1':
+                             fake_prob = score
+                         else:
+                             fake_prob = 1.0 - score
+                    
+                    # Update max fake score found across all faces
+                    if fake_prob > max_fake_score:
+                        max_fake_score = fake_prob
+                        
+                model_score = max_fake_score
                         
             except Exception as e:
                 print(f"Model inference failed: {e}")
+                import traceback
+                traceback.print_exc()
 
         # Combine scores
-        # If faces are found, rely heavily on the model (90%)
-        # If no faces, rely more on ELA or keep balanced
-        if faces_found:
-            final_score = (model_score * 0.9) + (ela_score * 0.1)
-        else:
-            final_score = (model_score * 0.4) + (ela_score * 0.6)
+        # Balance between the model and ELA to reduce both false positives and false negatives
+        # The model is powerful but can have biases, ELA provides a sanity check
         
-        label = "FAKE" if final_score > 0.5 else "REAL"
+        if faces_found:
+            # If faces are found, trust the model heavily but use ELA as a sanity check
+            final_score = (model_score * 0.85) + (ela_score * 0.15)
+        else:
+            # If no faces found, be more conservative and balance the scores
+            final_score = (model_score * 0.70) + (ela_score * 0.30)
+        
+        # Use a higher threshold (70%) to reduce false positives on real images
+        # This requires even stronger evidence before labeling something as fake
+        label = "FAKE" if final_score > 0.70 else "REAL"
         
         return {
             "score": float(final_score),
