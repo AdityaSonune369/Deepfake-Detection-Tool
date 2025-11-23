@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deepfake Detector</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <div class="background-blobs">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+        <div class="blob blob-3"></div>
+    </div>
+
+    <div class="container">
+        <header>
+            <h1>Deepfake<span class="highlight">Detector</span></h1>
+            <p>Advanced AI-powered media verification tool</p>
+        </header>
+
+        <main>
+            <div class="upload-card glass">
+                <div class="upload-area" id="drop-zone">
+                    <div class="icon-container">
+                        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="17 8 12 3 7 8"></polyline>
+                            <line x1="12" y1="3" x2="12" y2="15"></line>
+                        </svg>
+                    </div>
+                    <h3>Drag & Drop Media Here</h3>
+                    <p>or <span class="browse-btn">browse files</span></p>
+                    <input type="file" id="file-input" accept="image/*,video/*" hidden>
+                    <p class="subtext">Supports JPG, PNG, MP4, AVI</p>
+                </div>
+
+                <div id="preview-container" class="preview-container hidden">
+                    <img id="preview-image" class="media-preview hidden" />
+                    <video id="preview-video" class="media-preview hidden" controls></video>
+                    <p id="file-name" class="file-name"></p>
+                    <div class="button-group">
+                        <button id="change-file-btn" class="btn-secondary">Change File</button>
+                        <button id="analyze-btn" class="btn-primary">Analyze Media</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="loader" class="loader-container hidden">
+                <div class="spinner"></div>
+                <p>Analyzing media integrity...</p>
+            </div>
+
+            <div id="result-card" class="result-card glass hidden">
+                <div class="result-header">
+                    <h2>Analysis Result</h2>
+                    <span id="result-badge" class="badge">FAKE</span>
+                </div>
+
+                <div class="score-container">
+                    <div class="score-circle">
+                        <svg viewBox="0 0 36 36" class="circular-chart">
+                            <path class="circle-bg"
+                                d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                            <path id="score-circle-path" class="circle" stroke-dasharray="0, 100"
+                                d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                        </svg>
+                        <div class="percentage">
+                            <span id="score-value">0</span>%
+                            <span class="label">Fake Probability</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="details">
+                    <div class="detail-item">
+                        <span class="label">ELA Score</span>
+                        <div class="bar-container">
+                            <div id="ela-bar" class="bar" style="width: 0%"></div>
+                        </div>
+                    </div>
+                    <div class="detail-item">
+                        <span class="label">Model Confidence</span>
+                        <div class="bar-container">
+                            <div id="model-bar" class="bar" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <button id="reset-btn" class="btn-secondary">Analyze Another</button>
+            </div>
+        </main>
+    </div>
+
+    <script src="/static/script.js"></script>
+</body>
+
+</html>
