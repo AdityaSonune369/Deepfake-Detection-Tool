@@ -1,6 +1,6 @@
 # Technical Documentation - Deepfake Detection Tool
 
-**Creator:** Aditya  
+**Creator:** Aditya Sonune 
 **Last Updated:** November 23, 2025
 
 ---
@@ -321,7 +321,7 @@ huggingface_hub>=0.36.0
 
 ## License & Attribution
 
-**Creator:** Aditya  
+**Creator:** Aditya Sonune  
 **Model Credits:**
 - Vision Transformer: dima806 (Hugging Face)
 - Haar Cascade: OpenCV contributors
